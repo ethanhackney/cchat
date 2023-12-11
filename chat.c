@@ -82,6 +82,7 @@ chat_new(char *name)
         if (errno)
                 err(EX_SOFTWARE, "chat_new(): pthread_mutex_init()");
 
+        c->c_users = NULL;
         bkt = chat_hashfn(name);
         c->c_next = chat_hash[bkt];
         chat_hash[bkt] = c;

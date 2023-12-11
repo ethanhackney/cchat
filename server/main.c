@@ -59,6 +59,8 @@ cmd_interp(struct work *w)
         cname = strsep(&cmdp, ":");
         uname = strsep(&cmdp, "\n");
 
+        printf("cmd=%s, cname=%s, uname=%s\n", cmd, cname, uname);
+
         if (!strcmp(cmd, "create"))
                 do_create(connfd, cname, uname);
         if (!strcmp(cmd, "join"))
@@ -101,6 +103,7 @@ chatfn(void *arg)
         struct chat *c;
         struct user *u;
         struct user *v;
+        struct user *next;
         char msg[BUFSIZ + 1];
         ssize_t n;
         fd_set set;
@@ -131,24 +134,35 @@ chatfn(void *arg)
                 if (errno)
                         err(EX_SOFTWARE, "chatfn(): pthread_mutex_lock()");
 
-                for (u = c->c_users; u; u = u->u_next) {
+                for (u = c->c_users; u; u = next) {
+                        next = u->u_next;
+
                         if (!FD_ISSET(u->u_connfd, &set))
                                 continue;
 
-                        n = read(u->u_connfd, msg, sizeof(msg));
-                        if (n <= 0)
-                                err(EX_OSERR, "chatfn(): read()");
+                        n = read(u->u_connfd, msg, BUFSIZ);
+                        if (n <= 0) {
+                                chat_rm_user(c, u->u_name);
+                                continue;
+                        }
 
+                        msg[n] = 0;
+                        printf("user %s sent msg=%s\n", u->u_name, msg);
                         for (v = c->c_users; v; v = v->u_next) {
                                 if (write(v->u_connfd, msg, n) != n)
                                         err(EX_OSERR, "chatfn(): write()");
                         }
                 }
 
+                if (!c->c_users)
+                        break;
+
                 errno = pthread_mutex_unlock(&c->c_lock);
                 if (errno)
                         err(EX_SOFTWARE, "chatfn(): pthread_mutex_unlock()");
         }
+
+        return NULL;
 }
 
 static void

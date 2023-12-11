@@ -17,6 +17,10 @@ workq_new(size_t nr_threads, void (*fn)(struct work *))
         q->q_tail = &q->q_head;
         q->q_fn = fn;
 
+        errno = pthread_mutex_init(&q->q_lock, NULL);
+        if (errno)
+                err(EX_SOFTWARE, "workq_new(): pthread_mutex_init()");
+
         for (i = 0; i < nr_threads; i++) {
                 errno = pthread_create(&tid, NULL, workfn, q);
                 if (errno)
