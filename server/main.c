@@ -177,11 +177,18 @@ do_join(int connfd, char *cname, char *uname)
                 return;
         }
 
+        errno = pthread_mutex_lock(&c->c_lock);
+        if (errno)
+                err(EX_SOFTWARE, "do_join(): pthread_mutex_lock()");
+
         u = chat_find_user(c, uname);
         if (u) {
                 fd_puts(connfd, "user already in chatroom");
-                return;
+        } else {
+                chat_add_user(c, uname, connfd);
         }
 
-        chat_add_user(c, uname, connfd);
+        errno = pthread_mutex_unlock(&c->c_lock);
+        if (errno)
+                err(EX_SOFTWARE, "do_join(): pthread_mutex_unlock()");
 }
