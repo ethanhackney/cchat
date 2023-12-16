@@ -33,6 +33,7 @@ struct chat {
 
 /**
  * Add a new user to chat room:
+ *      must be called with c->c_lock held
  *
  * args:
  *      @c:             pointer to chat
@@ -45,6 +46,7 @@ extern struct user *chat_add_user(struct chat *c, char *name, int connfd);
 
 /**
  * Remove user from chat room:
+ *      must be called with c->c_lock held
  *
  * args:
  *      @c:     pointer to chat
@@ -56,6 +58,7 @@ extern void chat_rm_user(struct chat *c, char *name);
 
 /**
  * Search for a user by name:
+ *      must be called with c->c_lock held
  *
  * args:
  *      @c:     pointer to chat
