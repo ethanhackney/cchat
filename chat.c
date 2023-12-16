@@ -86,6 +86,7 @@ chat_new(char *name)
                 err(EX_SOFTWARE, "chat_new(): pthread_mutex_init()");
 
         c->c_users = NULL;
+        c->c_done = 0;
         bkt = chat_hashfn(name);
 
         errno = pthread_mutex_lock(&chat_lock);
@@ -128,7 +129,7 @@ chat_free(char *name)
 
         errno = pthread_mutex_lock(&chat_lock);
         if (errno)
-                err(EX_SOFTWARE, "chat_new(): pthread_mutex_lock()");
+                err(EX_SOFTWARE, "chat_free(): pthread_mutex_lock()");
 
         for (c = &chat_hash[bkt]; *c; c = &(*c)->c_next) {
                 if (!strcmp(name, (*c)->c_name))
@@ -138,7 +139,7 @@ chat_free(char *name)
         if (!*c) {
                 errno = pthread_mutex_unlock(&chat_lock);
                 if (errno)
-                        err(EX_SOFTWARE, "chat_new(): pthread_mutex_unlock()");
+                        err(EX_SOFTWARE, "chat_free(): pthread_mutex_unlock()");
                 return;
         }
 
@@ -146,7 +147,7 @@ chat_free(char *name)
         *c = tmp->c_next;
         errno = pthread_mutex_unlock(&chat_lock);
         if (errno)
-                err(EX_SOFTWARE, "chat_new(): pthread_mutex_unlock()");
+                err(EX_SOFTWARE, "chat_free(): pthread_mutex_unlock()");
 
         for (p = tmp->c_users; p; p = next) {
                 next = p->u_next;
@@ -174,7 +175,7 @@ chat_find(char *name)
 
         errno = pthread_mutex_lock(&chat_lock);
         if (errno)
-                err(EX_SOFTWARE, "chat_new(): pthread_mutex_lock()");
+                err(EX_SOFTWARE, "chat_find(): pthread_mutex_lock()");
 
         for (c = chat_hash[bkt]; c; c = c->c_next) {
                 if (!strcmp(name, c->c_name))
@@ -183,7 +184,7 @@ chat_find(char *name)
 
         errno = pthread_mutex_unlock(&chat_lock);
         if (errno)
-                err(EX_SOFTWARE, "chat_new(): pthread_mutex_unlock()");
+                err(EX_SOFTWARE, "chat_find(): pthread_mutex_unlock()");
 
         return c;
 }

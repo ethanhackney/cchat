@@ -115,6 +115,15 @@ chatfn(void *arg)
                 if (errno)
                         err(EX_SOFTWARE, "chatfn(): pthread_mutex_lock()");
 
+                /* TODO: there is a problem where someone else may
+                 * be trying to join the room while it is being deleted
+                 * and i do not yet know how to handle this condition
+                 */
+                if (!c->c_users) {
+                        chat_free(c->c_name);
+                        break;
+                }
+
                 FD_ZERO(&set);
                 maxfd = -1;
                 for (u = c->c_users; u; u = u->u_next) {
@@ -153,9 +162,6 @@ chatfn(void *arg)
                                         err(EX_OSERR, "chatfn(): write()");
                         }
                 }
-
-                if (!c->c_users)
-                        break;
 
                 errno = pthread_mutex_unlock(&c->c_lock);
                 if (errno)
