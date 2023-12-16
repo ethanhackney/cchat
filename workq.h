@@ -22,12 +22,20 @@ struct workq {
         pthread_mutex_t q_lock;
         /* condition variable for when work is available */
         pthread_cond_t  q_haswork;
+        /* wait for all threads to exit */
+        pthread_cond_t  q_cond_exit;
         /* head of work queue */
         struct work     *q_head;
         /* tail of work queue */
         struct work     **q_tail;
         /* function to call when more work is available */
         void            (*q_fn)(struct work *);
+        /* number of worker threads */
+        int             q_nr_threads;
+        /* tell worker threads when we are destroying the queue */
+        int             q_exiting;
+        /* number of threads exited */
+        int             q_exited;
 };
 
 /**

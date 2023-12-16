@@ -1,4 +1,5 @@
 #include "workq.h"
+#include <stdio.h>
 
 static void *workfn(void *arg);
 
@@ -16,10 +17,21 @@ workq_new(size_t nr_threads, void (*fn)(struct work *))
         q->q_head = NULL;
         q->q_tail = &q->q_head;
         q->q_fn = fn;
+        q->q_exited = 0;
+        q->q_exiting = 0;
+        q->q_nr_threads = nr_threads;
 
         errno = pthread_mutex_init(&q->q_lock, NULL);
         if (errno)
                 err(EX_SOFTWARE, "workq_new(): pthread_mutex_init()");
+
+        errno = pthread_cond_init(&q->q_haswork, NULL);
+        if (errno)
+                err(EX_SOFTWARE, "workq_new(): pthread_cond_init()");
+
+        errno = pthread_cond_init(&q->q_cond_exit, NULL);
+        if (errno)
+                err(EX_SOFTWARE, "workq_new(): pthread_cond_init()");
 
         for (i = 0; i < nr_threads; i++) {
                 errno = pthread_create(&tid, NULL, workfn, q);
@@ -36,16 +48,32 @@ workfn(void *arg)
         struct workq *q;
         struct work *w;
 
+        errno = pthread_detach(pthread_self());
+        if (errno)
+                err(EX_SOFTWARE, "workfn(): pthread_detach()");
+
         q = arg;
         for (;;) {
                 errno = pthread_mutex_lock(&q->q_lock);
                 if (errno)
                         err(EX_SOFTWARE, "workfn(): pthread_mutex_lock()");
 
-                while (!q->q_head) {
+                while (!q->q_head && !q->q_exiting) {
                         errno = pthread_cond_wait(&q->q_haswork, &q->q_lock);
                         if (errno)
                                 err(EX_SOFTWARE, "workfn(): pthread_cond_wait()");
+                }
+
+                if (q->q_exiting) {
+                        if (++q->q_exited == q->q_nr_threads) {
+                                errno = pthread_cond_signal(&q->q_cond_exit);
+                                if (errno)
+                                        err(EX_SOFTWARE, "workfn(): pthread_cond_signal()");
+                        }
+                        errno = pthread_mutex_unlock(&q->q_lock);
+                        if (errno)
+                                err(EX_SOFTWARE, "workfn(): pthread_mutex_unlock()");
+                        break;
                 }
 
                 w = q->q_head;
@@ -60,6 +88,8 @@ workfn(void *arg)
                 q->q_fn(w);
                 free(w);
         }
+
+        return NULL;
 }
 
 void
@@ -71,6 +101,20 @@ workq_free(struct workq **q)
         errno = pthread_mutex_lock(&(*q)->q_lock);
         if (errno)
                 err(EX_SOFTWARE, "workq_free(): pthread_mutex_lock()");
+
+        (*q)->q_exiting = 1;
+
+        errno = pthread_cond_broadcast(&(*q)->q_haswork);
+        if (errno)
+                err(EX_SOFTWARE, "workq_free(): pthread_cond_signal()");
+
+        errno = pthread_cond_wait(&(*q)->q_cond_exit, &(*q)->q_lock);
+        if (errno)
+                err(EX_SOFTWARE, "workq_free(): pthread_cond_wait()");
+
+        errno = pthread_mutex_unlock(&(*q)->q_lock);
+        if (errno)
+                err(EX_SOFTWARE, "workq_free(): pthread_mutex_unlock()");
 
         for (p = (*q)->q_head; p; p = next) {
                 next = p->w_next;
