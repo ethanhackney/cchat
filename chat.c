@@ -49,6 +49,7 @@ chat_rm_user(struct chat *c, char *name)
         if (close(tmp->u_connfd))
                 err(EX_OSERR, "chat_rm_user(): close()");
         free(tmp->u_name);
+        free(tmp);
 }
 
 struct user *
