@@ -8,6 +8,8 @@ enum {
 
 /* chatroom hash table */
 static struct chat *chat_hash[CHAT_HASH_SIZE];
+/* protects access to chat_hash */
+static pthread_mutex_t chat_lock = PTHREAD_MUTEX_INITIALIZER;
 
 struct user *
 chat_add_user(struct chat *c, char *name, int connfd)
@@ -84,8 +86,18 @@ chat_new(char *name)
 
         c->c_users = NULL;
         bkt = chat_hashfn(name);
+
+        errno = pthread_mutex_lock(&chat_lock);
+        if (errno)
+                err(EX_SOFTWARE, "chat_new(): pthread_mutex_lock()");
+
         c->c_next = chat_hash[bkt];
         chat_hash[bkt] = c;
+
+        errno = pthread_mutex_unlock(&chat_lock);
+        if (errno)
+                err(EX_SOFTWARE, "chat_new(): pthread_mutex_unlock()");
+
         return c;
 }
 
@@ -112,16 +124,28 @@ chat_free(char *name)
         size_t bkt;
 
         bkt = chat_hashfn(name);
+
+        errno = pthread_mutex_lock(&chat_lock);
+        if (errno)
+                err(EX_SOFTWARE, "chat_new(): pthread_mutex_lock()");
+
         for (c = &chat_hash[bkt]; *c; c = &(*c)->c_next) {
                 if (!strcmp(name, (*c)->c_name))
                         break;
         }
 
-        if (!*c)
+        if (!*c) {
+                errno = pthread_mutex_unlock(&chat_lock);
+                if (errno)
+                        err(EX_SOFTWARE, "chat_new(): pthread_mutex_unlock()");
                 return;
+        }
 
         tmp = *c;
         *c = tmp->c_next;
+        errno = pthread_mutex_unlock(&chat_lock);
+        if (errno)
+                err(EX_SOFTWARE, "chat_new(): pthread_mutex_unlock()");
 
         for (p = tmp->c_users; p; p = next) {
                 next = p->u_next;
@@ -146,10 +170,19 @@ chat_find(char *name)
         size_t bkt;
 
         bkt = chat_hashfn(name);
+
+        errno = pthread_mutex_lock(&chat_lock);
+        if (errno)
+                err(EX_SOFTWARE, "chat_new(): pthread_mutex_lock()");
+
         for (c = chat_hash[bkt]; c; c = c->c_next) {
                 if (!strcmp(name, c->c_name))
-                        return c;
+                        break;
         }
 
-        return NULL;
+        errno = pthread_mutex_unlock(&chat_lock);
+        if (errno)
+                err(EX_SOFTWARE, "chat_new(): pthread_mutex_unlock()");
+
+        return c;
 }
